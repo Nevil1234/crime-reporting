@@ -92,3 +92,17 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+
+/* Custom map controls */
+.mapboxgl-ctrl-group {
+  @apply bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden;
+}
+
+.mapboxgl-ctrl button {
+  @apply hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors;
+}
+
+.mapboxgl-ctrl-icon {
+  @apply text-gray-700 dark:text-gray-200;
+}

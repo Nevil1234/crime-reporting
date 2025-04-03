@@ -1,3 +1,5 @@
+"use client"
+
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -23,8 +25,10 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import RecentAlerts from "@/components/recent-alerts"
 import StatisticCard from "@/components/statistic-card"
+import { useRouter } from "next/navigation"
 
 export default function HomePage() {
+  const router = useRouter();
   return (
     <main className="flex min-h-screen flex-col pb-16 bg-gray-50 dark:bg-gray-950">
       {/* Header with SOS toggle */}
@@ -72,6 +76,7 @@ export default function HomePage() {
           variant="destructive"
           size="sm"
           className="bg-white text-red-600 hover:bg-white/90 rounded-full px-4 font-bold"
+          onClick={() => router.push("/emergency-report")}
         >
           SOS
         </Button>

@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useEffect, useState } from "react"  // Added useState
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -24,11 +25,43 @@ import NetworkStatus from "@/components/network-status"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import RecentAlerts from "@/components/recent-alerts"
-import StatisticCard from "@/components/statistic-card"
 import { useRouter } from "next/navigation"
+import { supabase } from "@/supabase/supabaseClient"
 
 export default function HomePage() {
   const router = useRouter();
+  const [refreshKey, setRefreshKey] = useState(0); // Add refresh state for map
+  const [userLocation, setUserLocation] = useState(null);
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  // Add refresh functionality without page reload
+  const handleRefresh = () => {
+    setRefreshKey(prevKey => prevKey + 1);
+  };
+
+  useEffect(() => {
+      const getProfile = async () => {
+        try {
+          const { data: { user }, error } = await supabase.auth.getUser()
+          
+          if (error || !user) {
+            // Redirect to login if not authenticated
+            router.push('/login')
+            return
+          }
+          
+          setUser(user)
+        } catch (error) {
+          console.error('Error fetching user profile:', error)
+        } finally {
+          setLoading(false)
+        }
+      }
+  
+      getProfile()
+    }, [router])
+
   return (
     <main className="flex min-h-screen flex-col pb-16 bg-gray-50 dark:bg-gray-950">
       {/* Header with SOS toggle */}
@@ -38,10 +71,15 @@ export default function HomePage() {
             <Shield className="h-5 w-5 text-white" />
           </div>
           <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
-            SafeReport
+            CrimeAlert
           </h1>
         </div>
         <div className="flex items-center space-x-3">
+          <Link href="/login">
+            <Button variant="ghost" size="icon" className="bg-sky-500 hover:bg-sky-70 w-14 h-8">
+              Login
+            </Button>
+          </Link>
           <Link href="/notifications">
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5" />
@@ -51,7 +89,7 @@ export default function HomePage() {
           <Link href="/profile">
             <Avatar className="h-8 w-8 border-2 border-primary">
               <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs">
-                JD
+                {user?.email?.slice(0, 2).toUpperCase() || '?'}
               </AvatarFallback>
             </Avatar>
           </Link>
@@ -86,14 +124,13 @@ export default function HomePage() {
       <div className="flex-1 p-4 space-y-6 max-w-5xl mx-auto w-full">
         {/* Tabs for different views */}
         <Tabs defaultValue="home" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
             <TabsTrigger value="home">Home</TabsTrigger>
             <TabsTrigger value="alerts">Alerts</TabsTrigger>
-            <TabsTrigger value="stats">Statistics</TabsTrigger>
           </TabsList>
 
           <TabsContent value="home" className="space-y-6">
-            {/* Map Section */}
+            {/* Map Section - Updated with refresh key */}
             <Card className="overflow-hidden border-none shadow-md">
               <CardContent className="p-0">
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4">
@@ -104,14 +141,26 @@ export default function HomePage() {
                     </Badge>
                   </div>
                 </div>
-                <CrimeMap />
+
+                {/* Pass refresh key to CrimeMap to force re-render */}
+                <CrimeMap key={refreshKey} />
+
                 <div className="p-3 flex justify-between items-center">
                   <div className="flex items-center text-sm text-muted-foreground">
                     <MapPin className="h-3 w-3 mr-1" />
-                    <span>Downtown, Cityville</span>
+                    {userLocation ? (
+                      <span>Your current area</span>
+                    ) : (
+                      <span>Showing nearby incidents</span>
+                    )}
                   </div>
-                  <Button variant="ghost" size="sm" className="text-xs flex items-center">
-                    View Details
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs flex items-center"
+                    onClick={handleRefresh} // Use refresh handler instead of page reload
+                  >
+                    Refresh Map
                     <ChevronRight className="h-3 w-3 ml-1" />
                   </Button>
                 </div>
@@ -251,34 +300,7 @@ export default function HomePage() {
 
           <TabsContent value="stats" className="space-y-6">
             <div className="grid grid-cols-2 gap-3">
-              <StatisticCard
-                title="Reports Today"
-                value="24"
-                change="+12%"
-                icon={<FileText className="h-5 w-5" />}
-                trend="up"
-              />
-              <StatisticCard
-                title="Response Time"
-                value="18 min"
-                change="-5%"
-                icon={<Clock className="h-5 w-5" />}
-                trend="down"
-              />
-              <StatisticCard
-                title="Resolution Rate"
-                value="86%"
-                change="+3%"
-                icon={<TrendingUp className="h-5 w-5" />}
-                trend="up"
-              />
-              <StatisticCard
-                title="Active Cases"
-                value="142"
-                change="-8%"
-                icon={<FileText className="h-5 w-5" />}
-                trend="down"
-              />
+            
             </div>
 
             <Card className="border-none shadow-md overflow-hidden">

@@ -22,6 +22,7 @@ import {
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import clsx from 'clsx';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -66,7 +67,8 @@ export default function StatusPage() {
               status,
               description,
               created_at
-            )
+            ),
+            current_status
           `)
           .eq('id', id)
           .single();
@@ -206,7 +208,6 @@ export default function StatusPage() {
               </TabsList>
 
               <TabsContent value="timeline">
-                {/* Status Timeline Card */}
                 <Card className="border-none shadow-md overflow-hidden">
                   <CardHeader className="p-4 pb-0">
                     <div className="flex items-center justify-between">
@@ -216,73 +217,75 @@ export default function StatusPage() {
                       </CardTitle>
                       <Badge
                         variant="outline"
-                        className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800"
+                        className={clsx(
+                          "border-0", // Remove default border
+                          {
+                            'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': 
+                              (report.current_status || report.status) === 'resolved',
+                            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300': 
+                              (report.current_status || report.status) === 'under_investigation',
+                            'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300': 
+                              (report.current_status || report.status) === 'received',
+                            // Default styling if no match
+                            'bg-gray-100 text-gray-800 dark:bg-gray-800/50 dark:text-gray-300': 
+                              !['resolved', 'under_investigation', 'received'].includes(report.current_status || report.status)
+                          }
+                        )}
                       >
-                        {report.status || 'In Progress'}
+                        {(report.current_status || report.status)?.replace(/_/g, ' ')?.toUpperCase() || 'In Progress'}
                       </Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="p-4">
                     <div className="space-y-6">
-                      {/* Timeline - Dynamically generated based on available data */}
+                      {/* Timeline - Dynamic from status_updates */}
                       <div className="relative pl-8 border-l-2 border-gray-200 dark:border-gray-700 space-y-8">
-                        {/* Step 1 - Always show Report Received */}
-                        <div className="relative">
-                          <div className="absolute -left-[25px] h-6 w-6 rounded-full bg-green-500 flex items-center justify-center">
-                            <CheckCircle className="h-4 w-4 text-white" />
-                          </div>
-                          <div>
-                            <p className="font-medium">Report Received</p>
-                            <div className="flex items-center text-sm text-muted-foreground mt-1">
-                              <Clock className="h-3 w-3 mr-1" />
-                              <span>{report.formatted_date}, {report.formatted_time}</span>
+                        {report.status_updates && report.status_updates.length > 0 ? (
+                          report.status_updates.map((update: any, index: number) => (
+                            <div key={index} className="relative">
+                              <div className={`absolute -left-[25px] h-6 w-6 rounded-full ${
+                                index === 0 ? 'bg-green-500' : 'bg-blue-500'
+                              } flex items-center justify-center`}>
+                                {index === 0 ? (
+                                  <CheckCircle className="h-4 w-4 text-white" />
+                                ) : (
+                                  <div className="h-3 w-3 bg-white rounded-full" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-medium capitalize">
+                                  {update.status.toLowerCase().replace(/_/g, ' ')}
+                                </p>
+                                <div className="flex items-center text-sm text-muted-foreground mt-1">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  <span>{update.formatted_date}, {update.formatted_time}</span>
+                                </div>
+                                {update.description && (
+                                  <p className="text-sm mt-1">
+                                    {update.description}
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                            <p className="text-sm mt-1">
-                              Your {report.crime_type.toLowerCase()} report has been successfully submitted.
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Step 2 - Show if there's an assigned officer */}
-                        {report.assigned_officer && (
+                          ))
+                        ) : (
+                          // Fallback if no status updates exist
                           <div className="relative">
                             <div className="absolute -left-[25px] h-6 w-6 rounded-full bg-green-500 flex items-center justify-center">
                               <CheckCircle className="h-4 w-4 text-white" />
                             </div>
                             <div>
-                              <p className="font-medium">Under Review</p>
+                              <p className="font-medium">Report Received</p>
                               <div className="flex items-center text-sm text-muted-foreground mt-1">
                                 <Clock className="h-3 w-3 mr-1" />
                                 <span>{report.formatted_date}, {report.formatted_time}</span>
                               </div>
-                              <p className="text-sm mt-1">An officer has been assigned to review your case.</p>
-                              <div className="flex items-center mt-2">
-                                <div className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center mr-2">
-                                  <User className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-                                </div>
-                                <span className="text-sm font-medium">Officer {report.assigned_officer}</span>
-                              </div>
+                              <p className="text-sm mt-1">
+                                Your {report.crime_type.toLowerCase()} report has been successfully submitted.
+                              </p>
                             </div>
                           </div>
                         )}
-
-                        {/* Step 3 - Current status */}
-                        <div className="relative">
-                          <div className="absolute -left-[25px] h-6 w-6 rounded-full bg-yellow-500 flex items-center justify-center">
-                            <AlertCircle className="h-4 w-4 text-white" />
-                          </div>
-                          <div>
-                            <p className="font-medium">Investigation</p>
-                            <div className="flex items-center text-sm text-muted-foreground mt-1">
-                              <Clock className="h-3 w-3 mr-1" />
-                              <span>In progress</span>
-                            </div>
-                            <p className="text-sm mt-1">Officers are investigating your report and gathering evidence.</p>
-                            <Button variant="link" className="p-0 h-auto text-sm text-blue-600 dark:text-blue-400 mt-1">
-                              View investigation details
-                            </Button>
-                          </div>
-                        </div>
                       </div>
 
                       {/* Contact Button */}
@@ -334,9 +337,21 @@ export default function StatusPage() {
                           <span className="text-muted-foreground">Status</span>
                           <Badge
                             variant="outline"
-                            className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800"
+                            className={clsx(
+                              "border-0", 
+                              {
+                                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': 
+                                  (report.current_status || report.status) === 'resolved',
+                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300': 
+                                  (report.current_status || report.status) === 'under_investigation',
+                                'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300': 
+                                  (report.current_status || report.status) === 'received',
+                                'bg-gray-100 text-gray-800 dark:bg-gray-800/50 dark:text-gray-300': 
+                                  !['resolved', 'under_investigation', 'received'].includes(report.current_status || report.status)
+                              }
+                            )}
                           >
-                            {report.status || 'In Progress'}
+                            {(report.current_status || report.status)?.replace(/_/g, ' ')?.toUpperCase() || 'In Progress'}
                           </Badge>
                         </div>
                         {report.assigned_officer && (

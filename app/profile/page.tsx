@@ -1,3 +1,5 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
@@ -18,12 +20,66 @@ import {
   MapPin,
   AlertTriangle,
   Search,
+  Loader2
 } from "lucide-react"
 import Link from "next/link"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
+import { useState, useEffect } from "react"
+import { createClient } from "@supabase/supabase-js"
+import { useRouter } from "next/navigation"
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default function ProfilePage() {
+  const router = useRouter()
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const getProfile = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser()
+        
+        if (error || !user) {
+          // Redirect to login if not authenticated
+          router.push('/login')
+          return
+        }
+        
+        setUser(user)
+      } catch (error) {
+        console.error('Error fetching user profile:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    getProfile()
+  }, [router])
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      router.push('/login')
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="mt-2 text-sm text-muted-foreground">Loading profile...</p>
+      </main>
+    )
+  }
+
   return (
     <main className="flex min-h-screen flex-col pb-16 bg-gray-50 dark:bg-gray-950">
       {/* Header */}
@@ -46,15 +102,19 @@ export default function ProfilePage() {
               <div className="flex flex-col items-center">
                 <Avatar className="h-24 w-24 border-4 border-white dark:border-gray-900">
                   <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-2xl">
-                    JD
+                    {user?.email?.slice(0, 2).toUpperCase() || '?'}
                   </AvatarFallback>
                 </Avatar>
-                <h2 className="text-xl font-bold mt-2">John Doe</h2>
-                <p className="text-sm text-muted-foreground">john.doe@example.com</p>
+                <h2 className="text-xl font-bold mt-2">
+                  {user?.user_metadata?.username || user?.email?.split('@')[0] || 'User'}
+                </h2>
+                <p className="text-sm text-muted-foreground">{user?.email}</p>
                 <div className="flex items-center mt-1">
                   <div className="bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full flex items-center">
                     <div className="h-2 w-2 bg-green-500 rounded-full mr-1"></div>
-                    <span className="text-xs text-green-800 dark:text-green-400">Verified</span>
+                    <span className="text-xs text-green-800 dark:text-green-400">
+                      {user?.email_confirmed_at ? 'Verified' : 'Pending Verification'}
+                    </span>
                   </div>
                 </div>
                 <Button variant="outline" size="sm" className="mt-3">
@@ -227,10 +287,11 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Logout Button */}
+          {/* Logout Button - Updated with onClick handler */}
           <Button
             variant="outline"
             className="w-full flex items-center justify-center text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/30"
+            onClick={handleLogout}
           >
             <LogOut className="h-4 w-4 mr-2" />
             Sign Out
@@ -239,9 +300,8 @@ export default function ProfilePage() {
           <p className="text-center text-xs text-muted-foreground">SafeReport v2.0.1 • © 2025</p>
         </div>
       </div>
-
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t py-2 shadow-lg">
+{/* Bottom Navigation */}
+<nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t py-2 shadow-lg">
         <div className="flex justify-around items-center">
           <Link href="/" className="flex flex-col items-center p-2">
             <div className="bg-gray-100 dark:bg-gray-800 p-1.5 rounded-full">
@@ -272,4 +332,3 @@ export default function ProfilePage() {
     </main>
   )
 }
-

@@ -1,10 +1,12 @@
-'use client'
-import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@supabase/supabase-js'
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+"use client";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import StatusMap from "@/components/status-map";
+import { parseLocation } from "@/lib/utils";
 import {
   ChevronLeft,
   Search,
@@ -18,37 +20,43 @@ import {
   Share2,
   Download,
   User,
-} from "lucide-react"
-import Link from "next/link"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import clsx from 'clsx';
+} from "lucide-react";
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import clsx from "clsx";
+import handleDownloadPDF from "@/components/download-as-pdf";
 
 // Initialize Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+);
 
 export default function StatusPage() {
-  const [report, setReport] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
-  const [trackingCode, setTrackingCode] = useState('')
-  const router = useRouter()
-  const searchParams = useSearchParams()
+  const [report, setReport] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [trackingCode, setTrackingCode] = useState("");
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     const fetchReport = async (id: string) => {
       setLoading(true);
       try {
         // Verify ID format first
-        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
-          throw new Error('Invalid report ID format');
+        if (
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            id
+          )
+        ) {
+          throw new Error("Invalid report ID format");
         }
 
         const { data, error } = await supabase
-          .from('crime_reports')
-          .select(`
+          .from("crime_reports")
+          .select(
+            `
             id,
             crime_type,
             description,
@@ -69,79 +77,95 @@ export default function StatusPage() {
               created_at
             ),
             current_status
-          `)
-          .eq('id', id)
+          `
+          )
+          .eq("id", id)
           .single();
 
         if (error) {
-          console.error('Supabase Error Details:', {
+          console.error("Supabase Error Details:", {
             code: error.code,
             message: error.message,
             details: error.details,
             hint: error.hint,
-            stack: error.stack
+            stack: error.stack,
           });
           throw error;
         }
 
         // Ensure we have data before formatting
         if (!data) {
-          console.error('No data found for report ID:', id);
-          throw new Error('Report not found in database');
+          console.error("No data found for report ID:", id);
+          throw new Error("Report not found in database");
         }
-        
+
         // Format the date
         data.formatted_date = new Date(data.created_at).toLocaleDateString();
-        data.formatted_time = new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        
+        data.formatted_time = new Date(data.created_at).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
         // Format status updates if they exist
         if (data.status_updates && data.status_updates.length > 0) {
-          data.status_updates = data.status_updates.map((update: any) => ({
-            ...update,
-            formatted_date: new Date(update.created_at).toLocaleDateString(),
-            formatted_time: new Date(update.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          })).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          data.status_updates = data.status_updates
+            .map((update: any) => ({
+              ...update,
+              formatted_date: new Date(update.created_at).toLocaleDateString(),
+              formatted_time: new Date(update.created_at).toLocaleTimeString(
+                [],
+                { hour: "2-digit", minute: "2-digit" }
+              ),
+            }))
+            .sort(
+              (a: any, b: any) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime()
+            );
         }
-        
+
         setReport(data);
       } catch (error) {
         // Comprehensive error logging with structured output
-        console.error('Full Error:', JSON.stringify(
-          error instanceof Error 
-            ? {
+        console.error(
+          "Full Error:",
+          JSON.stringify(
+            error instanceof Error
+              ? {
                 message: error.message,
                 name: error.name,
                 stack: error.stack,
-                cause: error.cause
-              } 
-            : error, 
-          null, 
-          2
-        ));
+                cause: error.cause,
+              }
+              : error,
+            null,
+            2
+          )
+        );
         setReport(null);
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    const id = searchParams.get('id')
+    const id = searchParams.get("id");
     if (id) {
-      setTrackingCode(id)
-      fetchReport(id)
+      setTrackingCode(id);
+      fetchReport(id);
     }
-  }, [searchParams])
+  }, [searchParams]);
 
   const handleSearch = () => {
     if (trackingCode.trim()) {
-      router.push(`/status?id=${trackingCode}`)
+      router.push(`/status?id=${trackingCode}`);
     }
-  }
+  };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch()
+    if (e.key === "Enter") {
+      handleSearch();
     }
-  }
+  };
 
   return (
     <main className="flex min-h-screen flex-col pb-16 bg-gray-50 dark:bg-gray-950">
@@ -165,14 +189,14 @@ export default function StatusPage() {
             </CardHeader>
             <CardContent className="p-4">
               <div className="flex space-x-2">
-                <Input 
-                  placeholder="e.g. A7X29B" 
-                  className="font-mono" 
+                <Input
+                  placeholder="e.g. A7X29B"
+                  className="font-mono"
                   value={trackingCode}
                   onChange={(e) => setTrackingCode(e.target.value)}
                   onKeyPress={handleKeyPress}
                 />
-                <Button 
+                <Button
                   className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                   onClick={handleSearch}
                   disabled={loading}
@@ -185,10 +209,7 @@ export default function StatusPage() {
                 </Button>
               </div>
               <div className="mt-4 flex justify-center">
-                <Button variant="outline" size="sm" className="flex items-center">
-                  <Camera className="h-4 w-4 mr-2" />
-                  Scan QR Code
-                </Button>
+               
               </div>
             </CardContent>
           </Card>
@@ -220,19 +241,30 @@ export default function StatusPage() {
                         className={clsx(
                           "border-0", // Remove default border
                           {
-                            'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': 
-                              (report.current_status || report.status) === 'resolved',
-                            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300': 
-                              (report.current_status || report.status) === 'under_investigation',
-                            'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300': 
-                              (report.current_status || report.status) === 'received',
+                            "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300":
+                              (report.current_status || report.status) ===
+                              "resolved",
+                            "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300":
+                              (report.current_status || report.status) ===
+                              "under_investigation",
+                            "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300":
+                              (report.current_status || report.status) ===
+                              "received",
                             // Default styling if no match
-                            'bg-gray-100 text-gray-800 dark:bg-gray-800/50 dark:text-gray-300': 
-                              !['resolved', 'under_investigation', 'received'].includes(report.current_status || report.status)
+                            "bg-gray-100 text-gray-800 dark:bg-gray-800/50 dark:text-gray-300":
+                              ![
+                                "resolved",
+                                "under_investigation",
+                                "received",
+                              ].includes(
+                                report.current_status || report.status
+                              ),
                           }
                         )}
                       >
-                        {(report.current_status || report.status)?.replace(/_/g, ' ')?.toUpperCase() || 'In Progress'}
+                        {(report.current_status || report.status)
+                          ?.replace(/_/g, " ")
+                          ?.toUpperCase() || "In Progress"}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -240,34 +272,43 @@ export default function StatusPage() {
                     <div className="space-y-6">
                       {/* Timeline - Dynamic from status_updates */}
                       <div className="relative pl-8 border-l-2 border-gray-200 dark:border-gray-700 space-y-8">
-                        {report.status_updates && report.status_updates.length > 0 ? (
-                          report.status_updates.map((update: any, index: number) => (
-                            <div key={index} className="relative">
-                              <div className={`absolute -left-[25px] h-6 w-6 rounded-full ${
-                                index === 0 ? 'bg-green-500' : 'bg-blue-500'
-                              } flex items-center justify-center`}>
-                                {index === 0 ? (
-                                  <CheckCircle className="h-4 w-4 text-white" />
-                                ) : (
-                                  <div className="h-3 w-3 bg-white rounded-full" />
-                                )}
-                              </div>
-                              <div>
-                                <p className="font-medium capitalize">
-                                  {update.status.toLowerCase().replace(/_/g, ' ')}
-                                </p>
-                                <div className="flex items-center text-sm text-muted-foreground mt-1">
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  <span>{update.formatted_date}, {update.formatted_time}</span>
+                        {report.status_updates &&
+                          report.status_updates.length > 0 ? (
+                          report.status_updates.map(
+                            (update: any, index: number) => (
+                              <div key={index} className="relative">
+                                <div
+                                  className={`absolute -left-[25px] h-6 w-6 rounded-full ${index === 0 ? "bg-green-500" : "bg-blue-500"
+                                    } flex items-center justify-center`}
+                                >
+                                  {index === 0 ? (
+                                    <CheckCircle className="h-4 w-4 text-white" />
+                                  ) : (
+                                    <div className="h-3 w-3 bg-white rounded-full" />
+                                  )}
                                 </div>
-                                {update.description && (
-                                  <p className="text-sm mt-1">
-                                    {update.description}
+                                <div>
+                                  <p className="font-medium capitalize">
+                                    {update.status
+                                      .toLowerCase()
+                                      .replace(/_/g, " ")}
                                   </p>
-                                )}
+                                  <div className="flex items-center text-sm text-muted-foreground mt-1">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    <span>
+                                      {update.formatted_date},{" "}
+                                      {update.formatted_time}
+                                    </span>
+                                  </div>
+                                  {update.description && (
+                                    <p className="text-sm mt-1">
+                                      {update.description}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))
+                            )
+                          )
                         ) : (
                           // Fallback if no status updates exist
                           <div className="relative">
@@ -278,28 +319,62 @@ export default function StatusPage() {
                               <p className="font-medium">Report Received</p>
                               <div className="flex items-center text-sm text-muted-foreground mt-1">
                                 <Clock className="h-3 w-3 mr-1" />
-                                <span>{report.formatted_date}, {report.formatted_time}</span>
+                                <span>
+                                  {report.formatted_date},{" "}
+                                  {report.formatted_time}
+                                </span>
                               </div>
                               <p className="text-sm mt-1">
-                                Your {report.crime_type.toLowerCase()} report has been successfully submitted.
+                                Your {report.crime_type.toLowerCase()} report
+                                has been successfully submitted.
                               </p>
                             </div>
                           </div>
                         )}
                       </div>
 
-                      {/* Contact Button */}
-                      <Button className="w-full flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
-                        <MessageSquare className="h-4 w-4 mr-2" />
-                        Contact Responder
-                      </Button>
+                     
 
                       <div className="flex space-x-2">
-                        <Button variant="outline" size="sm" className="flex-1 flex items-center justify-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 flex items-center justify-center"
+                          onClick={() => {
+                            // Format the message with report details
+                            const reportMessage = `
+🚨 Crime Report #${report.id.substring(0, 6).toUpperCase()}
+
+Type: ${report.crime_type}
+Status: ${(report.current_status || report.status)
+                                ?.replace(/_/g, " ")
+                                ?.toUpperCase() || "In Progress"
+                              }
+Reported: ${report.formatted_date}, ${report.formatted_time}
+
+Track this report at: ${window.location.href}
+    `.trim();
+
+                            // Create WhatsApp sharing URL
+                            const whatsappURL = `https://api.whatsapp.com/send?text=${encodeURIComponent(
+                              reportMessage
+                            )}`;
+
+                            // Open WhatsApp in a new tab
+                            window.open(whatsappURL, "_blank");
+                          }}
+                        >
                           <Share2 className="h-4 w-4 mr-2" />
                           Share
                         </Button>
-                        <Button variant="outline" size="sm" className="flex-1 flex items-center justify-center">
+                        
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 flex items-center justify-center"
+                          onClick={() => {handleDownloadPDF(report)}}
+                        >
                           <Download className="h-4 w-4 mr-2" />
                           Download
                         </Button>
@@ -318,46 +393,72 @@ export default function StatusPage() {
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <div className="flex justify-between py-2 border-b">
-                          <span className="text-muted-foreground">Report ID</span>
-                          <span className="font-medium">{report.id.substring(0, 6).toUpperCase()}</span>
+                          <span className="text-muted-foreground">
+                            Report ID
+                          </span>
+                          <span className="font-medium">
+                            {report.id.substring(0, 6).toUpperCase()}
+                          </span>
                         </div>
                         <div className="flex justify-between py-2 border-b">
                           <span className="text-muted-foreground">Type</span>
-                          <span className="font-medium">{report.crime_type}</span>
+                          <span className="font-medium">
+                            {report.crime_type}
+                          </span>
                         </div>
                         <div className="flex justify-between py-2 border-b">
-                          <span className="text-muted-foreground">Date Reported</span>
-                          <span className="font-medium">{report.formatted_date}</span>
+                          <span className="text-muted-foreground">
+                            Date Reported
+                          </span>
+                          <span className="font-medium">
+                            {report.formatted_date}
+                          </span>
                         </div>
                         <div className="flex justify-between py-2 border-b">
-                          <span className="text-muted-foreground">Time Reported</span>
-                          <span className="font-medium">{report.formatted_time}</span>
+                          <span className="text-muted-foreground">
+                            Time Reported
+                          </span>
+                          <span className="font-medium">
+                            {report.formatted_time}
+                          </span>
                         </div>
                         <div className="flex justify-between py-2 border-b">
                           <span className="text-muted-foreground">Status</span>
                           <Badge
                             variant="outline"
-                            className={clsx(
-                              "border-0", 
-                              {
-                                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': 
-                                  (report.current_status || report.status) === 'resolved',
-                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300': 
-                                  (report.current_status || report.status) === 'under_investigation',
-                                'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300': 
-                                  (report.current_status || report.status) === 'received',
-                                'bg-gray-100 text-gray-800 dark:bg-gray-800/50 dark:text-gray-300': 
-                                  !['resolved', 'under_investigation', 'received'].includes(report.current_status || report.status)
-                              }
-                            )}
+                            className={clsx("border-0", {
+                              "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300":
+                                (report.current_status || report.status) ===
+                                "resolved",
+                              "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300":
+                                (report.current_status || report.status) ===
+                                "under_investigation",
+                              "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300":
+                                (report.current_status || report.status) ===
+                                "received",
+                              "bg-gray-100 text-gray-800 dark:bg-gray-800/50 dark:text-gray-300":
+                                ![
+                                  "resolved",
+                                  "under_investigation",
+                                  "received",
+                                ].includes(
+                                  report.current_status || report.status
+                                ),
+                            })}
                           >
-                            {(report.current_status || report.status)?.replace(/_/g, ' ')?.toUpperCase() || 'In Progress'}
+                            {(report.current_status || report.status)
+                              ?.replace(/_/g, " ")
+                              ?.toUpperCase() || "In Progress"}
                           </Badge>
                         </div>
                         {report.assigned_officer && (
                           <div className="flex justify-between py-2 border-b">
-                            <span className="text-muted-foreground">Assigned Officer</span>
-                            <span className="font-medium">Officer {report.assigned_officer}</span>
+                            <span className="text-muted-foreground">
+                              Assigned Officer
+                            </span>
+                            <span className="font-medium">
+                              Officer {report.assigned_officer.badge_number}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -371,23 +472,32 @@ export default function StatusPage() {
 
                       {report.evidence && report.evidence.length > 0 && (
                         <div>
-                          <h3 className="font-medium mb-2">Evidence Submitted</h3>
+                          <h3 className="font-medium mb-2">
+                            Evidence Submitted
+                          </h3>
                           <div className="grid grid-cols-3 gap-2">
-                            {report.evidence.map((evidence: any, index: number) => (
-                              <a 
-                                key={index}
-                                href={supabase.storage.from('evidence').getPublicUrl(evidence.file_path).data.publicUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="bg-gray-100 dark:bg-gray-800 aspect-square rounded-md flex items-center justify-center hover:opacity-75 transition-opacity"
-                              >
-                                {evidence.type === 'IMAGE' ? (
-                                  <Camera className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                                ) : (
-                                  <FileText className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                                )}
-                              </a>
-                            ))}
+                            {report.evidence.map(
+                              (evidence: any, index: number) => (
+                                <a
+                                  key={index}
+                                  href={
+                                    supabase.storage
+                                      .from("evidence")
+                                      .getPublicUrl(evidence.file_path).data
+                                      .publicUrl
+                                  }
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="bg-gray-100 dark:bg-gray-800 aspect-square rounded-md flex items-center justify-center hover:opacity-75 transition-opacity"
+                                >
+                                  {evidence.type === "IMAGE" ? (
+                                    <Camera className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                                  ) : (
+                                    <FileText className="h-6 w-6 text-gray-600 dark:text-gray-400" />
+                                  )}
+                                </a>
+                              )
+                            )}
                           </div>
                         </div>
                       )}
@@ -411,7 +521,9 @@ export default function StatusPage() {
                         <div className="absolute top-1/2 left-1/3 transform -translate-x-1/2 -translate-y-1/2">
                           <div className="h-3 w-3 bg-blue-500 rounded-full"></div>
                           <div className="absolute -top-1 -left-1 h-5 w-5 bg-blue-500 rounded-full opacity-30 animate-ping"></div>
-                          <div className="text-xs mt-1 font-medium bg-white/80 dark:bg-gray-900/80 px-1 rounded">You</div>
+                          <div className="text-xs mt-1 font-medium bg-white/80 dark:bg-gray-900/80 px-1 rounded">
+                            You
+                          </div>
                         </div>
 
                         {/* Responder location marker */}
@@ -455,16 +567,19 @@ export default function StatusPage() {
                           <p className="text-sm text-blue-800 dark:text-blue-300 flex items-start">
                             <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
                             <span>
-                              Officer {report.assigned_officer} is reviewing your report. You can contact them directly using the button below.
+                              Officer {report.assigned_officer.badge_number} is
+                              reviewing your report. You can contact them
+                              directly using the button below.
                             </span>
                           </p>
                         </div>
                       )}
-
-                      <Button className="w-full flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
-                        <MessageSquare className="h-4 w-4 mr-2" />
-                        Contact Officer
-                      </Button>
+                      <Link href={"/chat-box"}>
+                        <Button className="w-full flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                          <MessageSquare className="h-4 w-4 mr-2" />
+                          Contact Officer
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
@@ -478,7 +593,8 @@ export default function StatusPage() {
                 <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
                 <h2 className="text-lg font-bold mb-2">Report Not Found</h2>
                 <p className="text-muted-foreground mb-4">
-                  We couldn't find a report with the tracking code "{trackingCode}". Please check the code and try again.
+                  We couldn't find a report with the tracking code "
+                  {trackingCode}". Please check the code and try again.
                 </p>
               </CardContent>
             </Card>
@@ -516,5 +632,5 @@ export default function StatusPage() {
         </div>
       </nav>
     </main>
-  )
+  );
 }

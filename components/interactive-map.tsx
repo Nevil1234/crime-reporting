@@ -28,7 +28,7 @@ export default function InteractiveMap({
   }, [initialLocation])
 
   const handleMove = useCallback((evt) => {
-    const coords = [evt.viewState.latitude, evt.viewState.longitude]
+    const coords: [number, number] = [evt.viewState.latitude, evt.viewState.longitude]
     onLocationChange(coords)
     setViewState(evt.viewState)
   }, [onLocationChange])
@@ -47,7 +47,7 @@ export default function InteractiveMap({
           longitude={viewState.longitude}
           draggable
           onDragEnd={(evt) => {
-            const coords = [evt.lngLat.lat, evt.lngLat.lng]
+            const coords: [number, number] = [evt.lngLat.lat, evt.lngLat.lng]
             onLocationChange(coords)
           }}
         >
@@ -58,7 +58,7 @@ export default function InteractiveMap({
           <button
             className="p-2 bg-white rounded-full shadow-md"
             onClick={() => {
-              // Add fullscreen implementation if needed
+              setViewState((prev) => ({ ...prev, zoom: prev.zoom + 1 }))
             }}
           >
             <Maximize className="w-5 h-5 text-gray-700" />

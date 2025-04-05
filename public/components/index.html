@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Support Collector</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f5f5f5;
+      text-align: center;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    .phone-icon {
+      width: 80px;
+      height: 80px;
+      background-color: #4CAF50;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      transition: all 0.3s;
+    }
+    .phone-icon:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+    }
+    .phone-icon i {
+      color: white;
+      font-size: 36px;
+    }
+    .status {
+      font-size: 16px;
+      color: #333;
+      min-height: 24px;
+    }
+    .permission-alert {
+      background: #FF9800;
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+      display: none;
+      max-width: 80%;
+      margin: 0 auto 20px;
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+  <div class="container">
+    <div class="permission-alert">Please allow microphone and location access</div>
+    <div class="phone-icon" id="phoneButton">
+      <i class="fas fa-phone"></i>
+    </div>
+    <div class="status" id="status">Click to report emergency</div>
+  </div>
+
+  <script>
+    const phoneButton = document.getElementById('phoneButton');
+    const statusElement = document.getElementById('status');
+    const permissionAlert = document.querySelector('.permission-alert');
+
+    let recognition;
+    let isCallActive = false;
+    let conversationState = 'getLocation';
+    let userData = {
+      location: null,
+      issueDescription: '',
+      mobileNumber: '',
+      priority: 'EMERGENCY'
+    };
+
+    phoneButton.addEventListener('click', toggleCall);
+
+    async function toggleCall() {
+      if (isCallActive) {
+        endCall();
+      } else {
+        await startCall();
+      }
+    }
+
+    async function startCall() {
+      try {
+        if (conversationState === 'getLocation') {
+          await getLocation();
+          conversationState = 'askIssue';
+        }
+
+        if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+          updateStatus("Speech recognition not supported");
+          return;
+        }
+
+        recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        recognition.onstart = () => {
+          isCallActive = true;
+          updateStatus("Listening...");
+          phoneButton.style.backgroundColor = '#f44336';
+
+          if (conversationState === 'askIssue') {
+            speak("Please describe your emergency");
+          } else if (conversationState === 'askNumber') {
+            speak("Please say your 10 digit mobile number");
+          }
+        };
+
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript.trim();
+
+          if (conversationState === 'askIssue') {
+            userData.issueDescription = transcript;
+            updateStatus("Emergency recorded. Now say your number");
+            conversationState = 'askNumber';
+            recognition.stop();
+            setTimeout(startNumberRecognition, 1500);
+          } else if (conversationState === 'askNumber') {
+            const numbers = transcript.replace(/\D/g, '');
+            if (numbers.length >= 10) {
+              userData.mobileNumber = numbers.slice(0, 10);
+              completeSubmission();
+            } else {
+              speak("Please say a valid 10 digit mobile number");
+              recognition.stop();
+              setTimeout(startNumberRecognition, 1500);
+            }
+          }
+        };
+
+        recognition.onerror = (event) => {
+          console.error("Recognition error:", event.error);
+          if (event.error === 'not-allowed' || event.error === 'audio-capture') {
+            showPermissionAlert();
+            updateStatus("Please allow microphone access");
+          } else {
+            updateStatus("Error occurred. Please try again.");
+          }
+        };
+
+        recognition.start();
+
+      } catch (err) {
+        console.error(err);
+        updateStatus("Error occurred. Please try again.");
+      }
+    }
+
+    function startNumberRecognition() {
+      if (recognition) recognition.start();
+    }
+
+    function completeSubmission() {
+      console.log("Complete User Data:", userData);
+      updateStatus("Emergency reported! We'll contact you shortly.");
+      speak("Thank you! Your emergency has been recorded. We'll contact you shortly.");
+      sendToSupabase(userData);
+      endCall();
+    }
+
+    function endCall() {
+      if (recognition) {
+        recognition.stop();
+      }
+      isCallActive = false;
+      phoneButton.style.backgroundColor = '#4CAF50';
+      updateStatus("Click to report emergency");
+      conversationState = 'getLocation';
+      userData = {
+        location: null,
+        issueDescription: '',
+        mobileNumber: '',
+        priority: 'EMERGENCY'
+      };
+    }
+
+    function speak(text) {
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    function updateStatus(message) {
+      statusElement.textContent = message;
+    }
+
+    function showPermissionAlert() {
+      permissionAlert.style.display = 'block';
+      setTimeout(() => {
+        permissionAlert.style.display = 'none';
+      }, 5000);
+    }
+
+    async function getLocation() {
+      return new Promise((resolve) => {
+        updateStatus("Getting location...");
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              userData.location = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+              };
+              updateStatus("Location captured");
+              resolve();
+            },
+            (error) => {
+              userData.location = {
+                error: "Location access denied or unavailable"
+              };
+              updateStatus("Location not available");
+              resolve();
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 5000,
+              maximumAge: 0
+            }
+          );
+        } else {
+          userData.location = {
+            error: "Geolocation not supported"
+          };
+          updateStatus("Location not supported");
+          resolve();
+        }
+      });
+    }
+
+    <!-- Update the sendToSupabase function -->
+
+async function sendToSupabase(data) {
+  const SUPABASE_URL = "https://eibznttfqbfqpppkasiu.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpYnpudHRmcWJmcXBwcGthc2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMzNTU5MDcsImV4cCI6MjA1ODkzMTkwN30.gzdFGihUJEXanAWiXP1yhYeTLL96dEjQNV6Qj3gKo5s";
+
+  try {
+    const locationString = data.location?.latitude && data.location?.longitude ? 
+      `SRID=4326;POINT(${data.location.longitude} ${data.location.latitude})` : 
+      null;
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/crime_reports`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify({
+        crime_type: "EMERGENCY",
+        description: data.issueDescription,
+        location: locationString,
+        status: "received",
+        priority: data.priority
+      })
+    });
+
+    if (response.ok) {
+      console.log("✅ Emergency report sent successfully");
+    } else {
+      const error = await response.text();
+      console.error("❌ Supabase Error:", error);
+    }
+  } catch (error) {
+    console.error("❌ Network Error:", error);
+  }
+}
+  </script>
+</body>
+</html>

@@ -18,7 +18,7 @@ interface Incident {
   crime_type: string
   description: string
   created_at: string
-  location: string
+  location: string | null
   status: string
 }
 
@@ -42,6 +42,7 @@ export default function RecentAlerts() {
           `)
           .order('created_at', { ascending: false })
           .limit(5)
+          .not('location', 'is', null)
 
         if (error) throw error
         setIncidents(data || [])
@@ -55,9 +56,18 @@ export default function RecentAlerts() {
     fetchIncidents()
   }, [])
 
-  const parseLocation = (wkt: string) => {
+  const parseLocation = (wkt: string | null) => {
+    if(!wkt) return null;
+    try{
     const matches = wkt.match(/SRID=4326;POINT\((-?\d+\.?\d*) (-?\d+\.?\d*)\)/)
-    return matches ? { lng: +matches[1], lat: +matches[2] } : null
+    return matches ? { 
+      lng: parseFloat(matches[1]), lat: parseFloat(matches[2]) 
+    } : null;
+  }
+  catch (error) {
+    console.error("Error parsing location:", error)
+    return null
+  }
   }
 
   const formatTime = (dateString: string) => {
@@ -150,7 +160,7 @@ export default function RecentAlerts() {
                       {location ? (
                         <span>{location.lat.toFixed(4)}, {location.lng.toFixed(4)}</span>
                       ) : (
-                        <span>Unknown location</span>
+                        <span className="text-muted-foreground">Location Unavailable</span>
                       )}
                       <span className="mx-2">•</span>
                       <Clock className="h-3 w-3 mr-1" />
@@ -179,11 +189,16 @@ export default function RecentAlerts() {
               <p className="text-sm text-muted-foreground mt-1">
                 Always be aware of your surroundings and report any suspicious activity immediately.
               </p>
-              <Link href="https://www.saferwatchapp.com/blog/report-suspicious-activity/">
-              <Button variant="link" className="text-red-600 dark:text-red-400 p-0 h-auto mt-1 text-sm">
+              <a 
+          href="https://nhrccb.org/crimecontrolact.php" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-blue-600 dark:text-blue-400 text-sm flex items-center mt-0"
+        >  
+              <Button variant="link" className="p-0 h-auto mt-1 text-sm">
                 View safety tips
               </Button>
-              </Link>
+              </a>
             </div>
           </div>
         </CardContent>

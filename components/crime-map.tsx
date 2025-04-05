@@ -59,7 +59,7 @@ export default function CrimeMap() {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, { 
           enableHighAccuracy: true,
-          timeout: 10000
+          timeout: 1000000
         });
       });
 

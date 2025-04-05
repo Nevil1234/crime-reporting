@@ -13,7 +13,6 @@ export const createReport = async (data) => {
         crime_type: data.crimeType,
         description: data.description,
         location: data.location,
-        is_anonymous: data.isAnonymous,
         media: data.media
       }])
       .select('id')

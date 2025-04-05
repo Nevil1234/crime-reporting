@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import {
   ChevronLeft,
   User,
@@ -39,6 +41,14 @@ export default function ProfilePage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [isDarkMode, setIsDarkMode] = useState(false)
+  const [contacts, setContacts] = useState<any[]>([])
+  const [showAddContact, setShowAddContact] = useState(false)
+  const [newContact, setNewContact] = useState({
+    name: '',
+    phone: '',
+    relationship: ''
+  })
 
   useEffect(() => {
     const getProfile = async () => {
@@ -61,6 +71,80 @@ export default function ProfilePage() {
 
     getProfile()
   }, [router])
+
+  useEffect(() => {
+    const loadContacts = async () => {
+      if (!user) return
+      
+      const { data, error } = await supabase
+        .from('emergency_contacts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+  
+      if (!error && data) setContacts(data)
+    }
+    
+    loadContacts()
+  }, [user])
+
+  useEffect(() => {
+    // Check if user has a saved preference
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    // Set initial state based on saved preference or system preference
+    const initialDarkMode = savedTheme === 'dark' || (!savedTheme && prefersDark);
+    setIsDarkMode(initialDarkMode);
+    
+    // Apply theme to document
+    if (initialDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  const toggleDarkMode = (checked: boolean) => {
+    setIsDarkMode(checked);
+    
+    if (checked) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  };
+
+  // Add contact submission handler
+  const handleAddContact = async () => {
+    try {
+      const { error } = await supabase
+        .from('emergency_contacts')
+        .insert([{
+          user_id: user.id,
+          name: newContact.name,
+          phone_number: newContact.phone,
+          relationship: newContact.relationship
+        }])
+
+      if (error) throw error
+
+      // Refresh contacts
+      const { data } = await supabase
+        .from('emergency_contacts')
+        .select('*')
+        .eq('user_id', user.id)
+
+      if (data) setContacts(data)
+      setShowAddContact(false)
+      setNewContact({ name: '', phone: '', relationship: '' })
+
+    } catch (error) {
+      console.error('Error adding contact:', error)
+    }
+  }
 
   const handleLogout = async () => {
     try {
@@ -117,9 +201,6 @@ export default function ProfilePage() {
                     </span>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="mt-3">
-                  Edit Profile
-                </Button>
               </div>
             </CardContent>
           </Card>
@@ -154,7 +235,11 @@ export default function ProfilePage() {
                       Dark Mode
                     </Label>
                   </div>
-                  <Switch id="dark-mode" />
+                  <Switch 
+                    id="dark-mode" 
+                    checked={isDarkMode}
+                    onCheckedChange={toggleDarkMode}
+                  />
                 </div>
 
                 <Separator />
@@ -194,13 +279,32 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Emergency Contacts */}
+          {/* Emergency Contacts Card - UPDATED */}
           <Card className="border-none shadow-md overflow-hidden">
             <CardHeader className="p-4 pb-0">
               <CardTitle>Emergency Contacts</CardTitle>
             </CardHeader>
             <CardContent className="p-4">
               <div className="space-y-3">
+                {contacts.map((contact) => (
+                  <div key={contact.id} className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-full mr-3">
+                        <User className="h-5 w-5 text-red-600 dark:text-red-400" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{contact.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {contact.relationship} • {contact.phone_number}
+                        </p>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" className="rounded-full">
+                      <Phone className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-full mr-3">
@@ -208,7 +312,7 @@ export default function ProfilePage() {
                     </div>
                     <div>
                       <p className="font-medium">Police</p>
-                      <p className="text-sm text-muted-foreground">911</p>
+                      <p className="text-sm text-muted-foreground">100</p>
                     </div>
                   </div>
                   <Button variant="outline" size="sm" className="rounded-full">
@@ -216,24 +320,12 @@ export default function ProfilePage() {
                   </Button>
                 </div>
 
-                <Separator />
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-full mr-3">
-                      <User className="h-5 w-5 text-red-600 dark:text-red-400" />
-                    </div>
-                    <div>
-                      <p className="font-medium">Emergency Contact</p>
-                      <p className="text-sm text-muted-foreground">Jane Doe (Wife)</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm" className="rounded-full">
-                    <Phone className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <Button variant="outline" size="sm" className="w-full mt-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full mt-2"
+                  onClick={() => setShowAddContact(true)}
+                >
                   Add Emergency Contact
                 </Button>
               </div>
@@ -287,7 +379,7 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Logout Button - Updated with onClick handler */}
+          {/* Logout Button */}
           <Button
             variant="outline"
             className="w-full flex items-center justify-center text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/30"
@@ -300,8 +392,9 @@ export default function ProfilePage() {
           <p className="text-center text-xs text-muted-foreground">SafeReport v2.0.1 • © 2025</p>
         </div>
       </div>
-{/* Bottom Navigation */}
-<nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t py-2 shadow-lg">
+
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t py-2 shadow-lg">
         <div className="flex justify-around items-center">
           <Link href="/" className="flex flex-col items-center p-2">
             <div className="bg-gray-100 dark:bg-gray-800 p-1.5 rounded-full">
@@ -329,6 +422,33 @@ export default function ProfilePage() {
           </Link>
         </div>
       </nav>
+
+      {/* Add contact modal */}
+      <Dialog open={showAddContact} onOpenChange={setShowAddContact}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Emergency Contact</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              placeholder="Full Name"
+              value={newContact.name}
+              onChange={(e) => setNewContact(prev => ({...prev, name: e.target.value}))}
+            />
+            <Input
+              placeholder="Phone Number"
+              value={newContact.phone}
+              onChange={(e) => setNewContact(prev => ({...prev, phone: e.target.value}))}
+            />
+            <Input
+              placeholder="Relationship (optional)"
+              value={newContact.relationship}
+              onChange={(e) => setNewContact(prev => ({...prev, relationship: e.target.value}))}
+            />
+            <Button onClick={handleAddContact} className="w-full">Save Contact</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }

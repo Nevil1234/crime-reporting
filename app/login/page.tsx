@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { AuthForm } from "@/components/auth-form"
 import { useReport } from "@/context/report-context"
 import { useRouter } from "next/navigation"
+import { ensureUserProfile } from "@/lib/auth-helpers"
 
 export default function LoginPage() {
   const reportContext = useReport()
@@ -19,12 +20,20 @@ export default function LoginPage() {
 
   return (
     <div>
-      <AuthForm onSuccess={() => {
-        if (pendingReport) {
-          clearPendingReport()
-          router.push('/report')
-        } else {
-          router.push('/')
+      <AuthForm onSuccess={async (email, password) => {
+        const { data: { user } } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (user) {
+          await ensureUserProfile(user.id);
+          if (pendingReport) {
+            clearPendingReport()
+            router.push('/report')
+          } else {
+            router.push('/')
+          }
         }
       }} />
     </div>

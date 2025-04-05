@@ -75,17 +75,24 @@ export default function HomePage() {
           </h1>
         </div>
         <div className="flex items-center space-x-3">
+        <a 
+          href="/components/index.html" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-blue-600 dark:text-blue-400 text-sm flex items-center hover:underline mt-1"
+        >  Emergency Call 
+        </a> 
           <Link href="/login">
             <Button variant="ghost" size="icon" className="bg-sky-500 hover:bg-sky-70 w-14 h-8">
               Login
             </Button>
           </Link>
-          <Link href="/notifications">
+          {/* <Link href="/notifications">
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5" />
               <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
             </Button>
-          </Link>
+          </Link> */}
           <Link href="/profile">
             <Avatar className="h-8 w-8 border-2 border-primary">
               <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs">
@@ -233,7 +240,7 @@ export default function HomePage() {
                         </div>
                         <div className="flex items-center text-sm text-muted-foreground mt-1">
                           <MapPin className="h-3 w-3 mr-1" />
-                          <span>0.8 miles away</span>
+                          <span>0.8 km away</span>
                           <span className="mx-2">•</span>
                           <Clock className="h-3 w-3 mr-1" />
                           <span>2 hours ago</span>
@@ -258,7 +265,7 @@ export default function HomePage() {
                         </div>
                         <div className="flex items-center text-sm text-muted-foreground mt-1">
                           <MapPin className="h-3 w-3 mr-1" />
-                          <span>1.2 miles away</span>
+                          <span>1.2 km away</span>
                           <span className="mx-2">•</span>
                           <Clock className="h-3 w-3 mr-1" />
                           <span>Yesterday</span>
@@ -285,9 +292,14 @@ export default function HomePage() {
                     <p className="text-sm text-muted-foreground mt-1">
                       Always be aware of your surroundings, especially when walking alone at night.
                     </p>
-                    <Button variant="link" className="text-blue-600 dark:text-blue-400 p-0 h-auto mt-1 text-sm">
-                      View more tips
-                    </Button>
+                    <a 
+          href="https://nhrccb.org/crimecontrolact.php" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-blue-600 dark:text-blue-400 text-sm flex items-center hover:underline mt-1"
+        >                              View more tips
+        <ChevronRight className="h-4 w-4 ml-1" />
+                    </a>
                   </div>
                 </div>
               </CardContent>

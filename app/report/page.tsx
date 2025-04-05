@@ -28,6 +28,7 @@
   import InteractiveMap from "@/components/interactive-map"
   import { v4 as uuidv4 } from 'uuid'
   import { Progress } from "@/components/ui/progress"
+import VoiceRecorder from '@/components/VoiceRecorder'
 
   // Initialize Supabase client
   const supabase = createClient(
@@ -35,8 +36,79 @@
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
+  const GEMINI_API_KEY = 'AIzaSyCANIGZZ6jEIdpekln-TrA7BDbfoaPxPEg'
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent'
+
   // Define evidence types
   type EvidenceType = 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT'
+
+  // Function to analyze image using Gemini API
+async function analyzeImageWithGemini(imageFile: File): Promise<string> {
+  try {
+    // Convert image to base64
+    const base64Image = await new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const base64 = reader.result as string
+        resolve(base64.split(',')[1]) // Remove data URL prefix
+      }
+      reader.readAsDataURL(imageFile)
+    })
+
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: "Analyze this image and provide a concise 50-word description focusing on crime-related details. Count your words carefully and ensure the response is exactly 50 words - no more, no less."
+          }, {
+            inline_data: {
+              mime_type: imageFile.type,
+              data: base64Image
+            }
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.3,
+          topK: 16,
+          topP: 0.8,
+          maxOutputTokens: 100,
+        }
+      })
+    })
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      console.error('Failed to parse API response:', parseError);
+      return 'Error: Failed to parse API response';
+    }
+
+    // Log the response for debugging
+    console.log('API Response Status:', response.status);
+    console.log('API Response:', data);
+
+    if (!response.ok) {
+      const errorMessage = data?.error?.message || 'Unknown error';
+      return `Error: API request failed (${response.status}) - ${errorMessage}`;
+    }
+
+    // Check if we have a valid response structure
+    if (!data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      return 'Error: Invalid response format from image analysis';
+    }
+
+    return data.candidates[0].content.parts[0].text;
+  } catch (error) {
+    console.error('Error in image analysis:', error);
+    return `Error: ${error instanceof Error ? error.message : 'Failed to analyze image'}`;
+  }
+}
+
 
   export default function ReportPage() {
     const router = useRouter()
@@ -47,14 +119,38 @@
       location: [37.7749, -122.4194] as [number, number], // Default to SF
       media: [] as string[],
       address: 'Detecting location...',
+      
     })
     
     // Add file upload state
     const [files, setFiles] = useState<File[]>([])
     const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({})
+    const [user, setUser] = useState<any>(null);
 
     useEffect(() => {
-      if (navigator.geolocation) {
+      const searchParams = new URLSearchParams(window.location.search);
+  const incidentType = searchParams.get('type');
+  if (incidentType) {
+    // Map URL parameter to proper case incident type
+    const typeMap: {[key: string]: string} = {
+      'theft': 'Theft',
+      'assault': 'Assault',
+      'harassment': 'Harassment',
+      'vehicle': 'Vehicle',
+      'property': 'Property',
+      'other': 'Other'
+    };
+
+    const formattedType = typeMap[incidentType.toLowerCase()] || 'Other';
+    
+      // Set the selected crime type in form data
+      setFormData(prev => ({
+        ...prev,
+        crimeType: formattedType
+      }));
+    }  // Added missing closing brace
+  
+    if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           async (position) => {
             const { latitude, longitude } = position.coords
@@ -73,7 +169,22 @@
           }
         )
       }
+
     }, [])
+
+    useEffect(() => {
+      const getUser = async () => {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (user && !error) {
+          setUser(user);
+        } else {
+          // Redirect to login if not authenticated
+          router.push('/login');
+        }
+      };
+      
+      getUser();
+    }, [router]);
 
     const reverseGeocode = async (lat: number, lng: number) => {
       try {
@@ -105,12 +216,33 @@
       return data.path
     }
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files) {
         const newFiles = Array.from(e.target.files)
         setFiles(prev => [...prev, ...newFiles])
+  
+        // Analyze each image file with Gemini API
+        for (const file of newFiles) {
+          if (file.type.startsWith('image/')) {
+            try {
+              const analysis = await analyzeImageWithGemini(file)
+              if (analysis) {
+                // Update the description with the image analysis
+                setFormData(prev => ({
+                  ...prev,
+                  description: prev.description 
+                    ? `${prev.description}\n\nImage Analysis:\n${analysis}`
+                    : `Image Analysis:\n${analysis}`
+                }))
+              }
+            } catch (error) {
+              console.error('Error processing image:', error)
+            }
+          }
+        }
       }
     }
+  
 
     const removeFile = (index: number) => {
       setFiles(prev => prev.filter((_, i) => i !== index))
@@ -127,10 +259,30 @@
       }
     }
 
+    
     // Updated handleSubmit function with status tracking and better file handling
     const handleSubmit = async () => {
       try {
-        setIsSubmitting(true)
+        setIsSubmitting(true);
+        
+        // Check if user is authenticated
+        if (!user) {
+          router.push('/login');
+          return;
+        }
+        
+        // Create profile if it doesn't exist
+        try {
+          await supabase.from('profiles').upsert([{ 
+            id: user.id,
+            updated_at: new Date().toISOString()
+          }], {
+            onConflict: 'id',
+            ignoreDuplicates: true
+          });
+        } catch (profileError) {
+          console.warn('Profile handling warning:', profileError);
+        }
         
         // Upload files first
         const mediaUrls = await Promise.all(
@@ -167,7 +319,7 @@
         // Format using PostGIS-compatible EWKT
         const pointString = `SRID=4326;POINT(${lng} ${lat})`
         
-        // Submit report with initial status
+        // Submit report with initial status AND complainant_id
         const { data: report, error } = await supabase
           .from('crime_reports')
           .insert([{
@@ -175,7 +327,8 @@
             description: formData.description,
             location: pointString,
             status: 'received',
-            media: mediaUrls.map(item => item.path)
+            media: mediaUrls.map(item => item.path),
+            complainant_id: user.id  // Add this line
           }])
           .select('id')
           .single()
@@ -336,16 +489,29 @@
                       <span>{formData.description.length}/500</span>
                     </div>
                   </TabsContent>
-                  <TabsContent value="voice" className="flex flex-col items-center justify-center h-[120px]">
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      className="rounded-full h-16 w-16 bg-red-50 dark:bg-red-950/30 border-2 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30"
-                    >
-                      <Mic className="h-8 w-8 text-red-600 dark:text-red-400" />
-                    </Button>
-                    <p className="text-sm text-muted-foreground mt-3">Tap to record</p>
-                  </TabsContent>
+                  <TabsContent value="voice" className="flex flex-col items-center justify-center h-[150px]">
+  <VoiceRecorder 
+    onRecordingComplete={(audioBlob) => {
+      // Create a File object from the audio blob
+      const audioFile = new File([audioBlob], `voice-note-${Date.now()}.mp3`, {
+        type: 'audio/mp3'
+      });
+      
+      // Add to files array for uploading
+      setFiles(prev => [...prev, audioFile]);
+      
+      // Update description with a note about voice recording
+      if (!formData.description.includes("[Voice recording attached]")) {
+        setFormData(prev => ({
+          ...prev,
+          description: prev.description + 
+            (prev.description ? "\n\n" : "") + 
+            "[Voice recording attached]"
+        }));
+      }
+    }}
+  />
+</TabsContent>
                 </Tabs>
               </CardContent>
             </Card>

@@ -251,5 +251,5 @@ export default function ConfirmationPage() {
         <ConfirmationContent />
       </Suspense>
     </main>
-  )
+  );
 }

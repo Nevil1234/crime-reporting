@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { COMETCHAT_CONSTANTS, initializeCometChat } from '@/lib/cometChatConfig';
@@ -10,72 +9,79 @@ const ASSIGNED_OFFICER_ID = "02fed0e2-777b-449d-ace2-3b392884753e";
 
 export default function ComplainantChat() {
   const [message, setMessage] = useState('');
-  const [chatMessages, setChatMessages] = useState([]);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInitialized, setChatInitialized] = useState(false);
-  const [cometChatInstance, setCometChatInstance] = useState<typeof CometChat | null>(null);
+  const [cometChatInstance, setCometChatInstance] = useState<any>(null);
   const params = useSearchParams();
-  const userId = params.get('userId');
 
   useEffect(() => {
     const initChat = async () => {
       try {
+        // Initialize CometChat and store the instance.
         const instance = await initializeCometChat();
+        if (!instance) {
+          console.error("Failed to initialize CometChat");
+          return;
+        }
         setCometChatInstance(instance);
 
-        // Login as complainant
-        const complainantId = `${COMETCHAT_CONSTANTS.UID_PREFIX.COMPLAINANT}${userId}`;
+        // Login as the complainant.
+        const complainantId = "USER_" + params.get('userId');
         await instance.login(complainantId, COMETCHAT_CONSTANTS.AUTH_KEY);
 
-        // Set up message listener with metadata filter
+        // Set up a message listener.
         instance.addMessageListener(
           REPORT_ID,
           new CometChat.MessageListener({
-            onTextMessageReceived: (msg) => {
-              if (msg.getMetadata()?.reportId === REPORT_ID) {
-                setChatMessages(prev => [...prev, msg]);
-              }
+            onTextMessageReceived: (msg: any) => {
+              setChatMessages(prev => [...prev, msg]);
             },
           })
         );
 
-        // Fetch existing messages
+        // Fetch message history.
         const conversationID = `REPORT_${REPORT_ID}`;
         const messagesRequest = new CometChat.MessagesRequestBuilder()
-          .setConversationId(conversationID)
           .setLimit(50)
+          .setConversationId(conversationID)
           .build();
-        
         const messages = await messagesRequest.fetchPrevious();
         setChatMessages(messages);
         setChatInitialized(true);
       } catch (error) {
-        console.error("Initialization error:", error);
+        console.error("CometChat initialization error:", error);
       }
     };
 
     initChat();
-  }, [userId]);
+  }, [params]);
 
   const sendMessage = async () => {
-    if (!message.trim() || !chatInitialized) return;
+    if (!message.trim()) return;
+    if (!chatInitialized || !cometChatInstance) {
+      console.error("CometChat is not initialized");
+      return;
+    }
 
-    const officerUID = `${COMETCHAT_CONSTANTS.UID_PREFIX.OFFICER}${ASSIGNED_OFFICER_ID}`;
+    // Construct the message destined for the officer.
+    const officerUID = COMETCHAT_CONSTANTS.UID_PREFIX.OFFICER + ASSIGNED_OFFICER_ID;
     const textMessage = new CometChat.TextMessage(
       officerUID,
       message,
-      CometChat.RECEIVER_TYPE.USER,
-      {
-        conversationId: `REPORT_${REPORT_ID}`,
-        metadata: { reportId: REPORT_ID }
-      }
+      CometChat.RECEIVER_TYPE.USER
     );
+    textMessage.setMetadata({
+      conversationId: `REPORT_${REPORT_ID}`,
+      reportId: REPORT_ID,
+      officerId: ASSIGNED_OFFICER_ID,
+    });
 
     try {
       const sentMessage = await cometChatInstance.sendMessage(textMessage);
       setChatMessages(prev => [...prev, sentMessage]);
       setMessage('');
-    } catch (error) {
-      console.error("Send error:", error);
+    } catch (err) {
+      console.error("Message send failed:", err);
     }
   };
 
@@ -90,11 +96,11 @@ export default function ComplainantChat() {
         {chatMessages.map((msg, index) => (
           <div
             key={index}
-            className={`message ${msg.getSender().getUid().includes('OFFICER') ? 'officer' : 'user'}`}
+            className={`message ${msg.sender.uid.includes('OFFICER') ? 'officer' : 'user'}`}
           >
-            <p>{msg.getText()}</p>
+            <p>{msg.text}</p>
             <span className="text-xs text-gray-500">
-              {new Date(msg.getSentAt() * 1000).toLocaleTimeString()}
+              {new Date(msg.sentAt * 1000).toLocaleTimeString()}
             </span>
           </div>
         ))}
@@ -105,7 +111,7 @@ export default function ComplainantChat() {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           className="flex-1 p-2 border rounded"
-          placeholder={chatInitialized ? "Type your message..." : "Initializing..."}
+          placeholder={chatInitialized ? "Type your message..." : "Initializing chat..."}
           disabled={!chatInitialized}
         />
         <button 
